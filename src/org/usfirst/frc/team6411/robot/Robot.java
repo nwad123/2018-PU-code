@@ -259,7 +259,8 @@ public class Robot extends IterativeRobot {
 				}
 		}
 	}
-	void DetermineNecessaryTurns() { //////////////call at auto init/////////////////
+	void DetermineNecessaryTurns() {
+		//////////////call at auto init/////////////////
 		
 	//////////determines turning if needed by switch colors//////////	
 		if(GameData.charAt(0) == 'L') {
@@ -276,6 +277,7 @@ public class Robot extends IterativeRobot {
 		}
 		
 	//////////////////determine position in boolean///////////////////
+		//possibly change to boolean var(){} for simplcity
 		if(BeetBotPosition == Left) {
 			LeftStartPosition = true;
 		} else if(BeetBotPosition == Right) {
@@ -303,6 +305,7 @@ public class Robot extends IterativeRobot {
 /**********************************************************************************************/
 		/*************************High Level Methods***********************************/
 	void AutoRoutine() {
+		//don't forget to add a baseline routine
 		AutogetCube();
 		ExecuteNecessaryTurns();
 		tracktheSwitch();
