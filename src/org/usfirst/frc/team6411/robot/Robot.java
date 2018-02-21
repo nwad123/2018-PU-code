@@ -1,10 +1,3 @@
-/*----------------------------------------------------------------------------*/
-/* Copyright (c) 2017-2018 FIRST. All Rights Reserved.                        */
-/* Open Source Software - may be modified and shared by FRC teams. The code   */
-/* must be accompanied by the FIRST BSD license file in the root directory of */
-/* the project.                                                               */
-/*----------------------------------------------------------------------------*/
-
 package org.usfirst.frc.team6411.robot;
 
 import edu.wpi.first.wpilibj.IterativeRobot;
@@ -20,19 +13,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.ADXRS450_Gyro;
-
-
-
-
-/**
- * The VM is configured to automatically run this class, and to call the
- * functions corresponding to each mode, as described in the IterativeRobot
- * documentation. If you change the name of this class or the package after
- * creating this project, you must also update the build.properties file in the
- * project.
- */
-
-
+import edu.wpi.first.wpilibj.DriverStation;
 
 public class Robot extends IterativeRobot {
 	private static final String kDefaultAuto = "Default";
@@ -48,11 +29,17 @@ public class Robot extends IterativeRobot {
 	NetworkTableEntry tv = table.getEntry("tv");
 	NetworkTableEntry ledMode = table.getEntry("ledMode");
 	NetworkTableEntry camMode = table.getEntry("camMode");
-	//NetworkTableEntry pipeline0 = table.getEntry("pipeline");
 	double y = ty.getDouble(0);
 	double area;
-	double x,v;
 	
+	/////////////////////auto vars/////////////////////////
+	public double x,v, xf, xi, errorP, errorD, kP, kD, leftspin, 
+			rightspin, spinDirection;
+	
+	String GameData;
+	
+	public boolean LeftStartPosition, CenterStartPosition, RightStartingPosition, 
+			LeftSwitchLight, RightSwitchLight, timetotrack, cubegot = false;
 	//////////////////////Joysticks////////////////////////
 	Joystick Xbox1 = new Joystick(0);
 
@@ -87,6 +74,8 @@ public class Robot extends IterativeRobot {
 		RightArm.enableDeadbandElimination(true);
 		Elevator.enableDeadbandElimination(true);
 		
+		/////////////////////get switch/scale/////////////////////////
+		GameData = DriverStation.getInstance().getGameSpecificMessage();
 	}
 
 	
@@ -95,6 +84,9 @@ public class Robot extends IterativeRobot {
 		autoCount = 0;
 		camMode.setNumber(0);
 		ledMode.setNumber(0);
+		
+		GameData = DriverStation.getInstance().getGameSpecificMessage();
+		DetermineAuto();
 	}
 
 	@Override
@@ -102,21 +94,20 @@ public class Robot extends IterativeRobot {
 		area = ta.getDouble(0);
 		v = tv.getDouble(0);
 		x = tx.getDouble(0);
-		trickierVisiontracking(0);
+		AutoRoutine();
 	}
 
-	//////////////axis/////////////
+	//////////////axis from controller/////////////
 	public double LeftStick, RightStick, LeftThrottle, RightThrottle;
-	public boolean in, out, Target, AutoSuck, SuckB;
-	double steeringAdjust;
-	double headingError;
+	public boolean in, out;
+	///////////////////////////////////////////////
 	@Override
 	public void teleopPeriodic() {
 		
 		controllerInput();
 		driveTrain();
-		cubeIntake(in, out);
-		Elevator(LeftThrottle, RightThrottle);
+		cubeIntake();
+		Elevator();
 		
 	}
 
@@ -124,6 +115,8 @@ public class Robot extends IterativeRobot {
 	public void testPeriodic() {
 	}
 	
+/*****************************************************************************************/
+	/**************BASIC METHODS**************************************************/
 	void driveTrain() {	
 			LeftStick = LeftStick * -1;
 			RightStick = RightStick * 1;
@@ -158,13 +151,13 @@ public class Robot extends IterativeRobot {
 			RightThrottle = RightThrottle * .75; //Elevator
 	}
 	
-	void cubeIntake(boolean inin, boolean inout) {
-			if(inin) {
+	void cubeIntake() {
+			if(in) {
 				LeftArm.set(.44);
 				RightArm.set(-.44);
 			}
 			
-			else if(inout) {
+			else if(out) {
 				LeftArm.set(-1);
 				RightArm.set(1);
 			}
@@ -175,58 +168,106 @@ public class Robot extends IterativeRobot {
 			}
 	}
 	
-	void Elevator(double liftUp, double liftDown) {
-			if(liftUp > .1) {
-				Elevator.set(liftUp);
+	void Elevator() {
+			if(LeftThrottle > .1) {
+				Elevator.set(LeftThrottle);
 			}
-			else if(liftDown > .1) {
-				Elevator.set(-liftDown);
+			else if(RightThrottle > .1) {
+				Elevator.set(-RightThrottle);
 			}
 			else {
 				Elevator.set(0);
 			}
 	}
 	
-	void trickierVisiontracking(int RobotLocation) {
-			autoCount ++;
-			if(autoCount < 25) {
-				Elevator(1,0);
-			}else if(autoCount == 25){ 
-				Elevator(0,0);
-			}else if(autoCount < 75 && autoCount > 25) {
-				autoDrivetrain(.4,.45);
-			}else if (autoCount < 125 && autoCount > 75) {
-				autoDrivetrain(-.4,-.45);
-			}else if (autoCount < 175 && autoCount > 125) {
-				autoDrivetrain(.4,.45);
-				cubeIntake(true, false);
-			}else if (autoCount > 175) {
-			
+	
+			/////////////////Vision power////////////
+	void tracktheSwitch() {
+			if(cubegot) {	
+			//////////after cube pickup is done//////
+			if(CenterStartPosition) {
+				for(int autoCountV = 0; autoCountV < 40; autoCountV ++) {
+					ZoomBoi.arcadeDrive(.5, spinDirection);
+				} if (autoCount >= 40) {
+					timetotrack = true;
+				}
+			} else {
+				timetotrack = true;
+			}
+		////////wait for initial turn then do a vision///////
+				if(timetotrack) {
 					if(v == 1.0) {
 						if(area < 7) {
-							error = x;
-							error = error/35;
-							ZoomBoi.arcadeDrive(.65, error);
+							kP = .75;
+							kD = .01;
+							
+							xi = x;
+							xi = xi/35;
+							errorP = xi;
+							errorD = (xf - xi)/.02;
+							
+							error = (kP * errorP) + (kD * errorD);
+							
+							ZoomBoi.arcadeDrive(.75, error);
 							}
 						else {
 							ZoomBoi.arcadeDrive(0, 0);
 							}
 						}
-////////////////////////switch for field position and switch colors/////////////////////////////////////
-					
-				if(v != 1.0) { //switch statement to add for different field areas
-					autoDrivetrain(-.2, .2);
+				if(v != 1.0) { 
+					ZoomBoi.arcadeDrive(.5, spinDirection);
 				}
-				
-				
-				if(area > 10) {
-					cubeIntake(false, true);
-				}
-			
 			}
-			else {
-				System.out.println("cry");
-			}
+		///////////////////////////////////////////////////////
+		}
 	}
-	
+	void AutogetCube() {
+		if(!cubegot) {
+				autoCount ++;
+				if(autoCount < 25) {
+					Elevator.set(1);
+				}else if(autoCount == 25){ 
+					Elevator.set(0);
+				}else if(autoCount < 75 && autoCount > 25) {
+					autoDrivetrain(.4,.47);
+				}else if (autoCount < 125 && autoCount > 75) {
+					autoDrivetrain(-.4,-.47);
+				}else if (autoCount < 175 && autoCount > 125) {
+					//add elevator command
+					autoDrivetrain(.4,.45);
+					LeftArm.set(.34);
+					RightArm.set(-.34);
+				}
+				else if (autoCount == 175) {
+					cubegot = true;
+				}
+		}
+	}
+	void DetermineAuto() { //////////////call at autoinit/////////////////
+		if(GameData.charAt(0) == 'L') {
+			LeftSwitchLight = true;
+			RightSwitchLight = false;
+		}
+		else if(GameData.charAt(0) == 'R') {
+			RightSwitchLight = true;
+			LeftSwitchLight = false;
+		}
+		else {
+			RightSwitchLight = false;
+			LeftSwitchLight = false;
+		}
+		
+		if(RightSwitchLight) {
+			spinDirection = 1;
+		}
+		else if(LeftSwitchLight) {
+			spinDirection = -1;
+		}
+	}
+/**********************************************************************************************/
+		/*************************High Level Methods***********************************/
+	void AutoRoutine() {
+		AutogetCube();
+		tracktheSwitch();
+	}
 }
