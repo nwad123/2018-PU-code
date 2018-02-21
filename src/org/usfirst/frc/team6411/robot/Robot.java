@@ -29,7 +29,7 @@ public class Robot extends IterativeRobot {
 	double area;
 	
 	/////////////////////auto vars/////////////////////////
-	public double x,v, xf, xi, errorP, errorD, kP, kD, leftspin, 
+	public double x,v, xf, xi, error, errorP, errorD, kP, kD, leftspin, 
 			rightspin, spinDirection;
 	
 	String GameData;
@@ -65,8 +65,7 @@ public class Robot extends IterativeRobot {
 	Spark Elevator = new Spark(6);
 	
 	////////////////////random variables//////////////////
-	int autoCount, autoCountV;
-	double error;
+	int autoCount, autoCountV, autoCountB = 0;
 	
 	@Override
 	public void robotInit() {
@@ -75,8 +74,6 @@ public class Robot extends IterativeRobot {
 		StartingPositionChooser.addObject("The Right", Right);
 		StartingPositionChooser.addObject("Baseline Only", Baseline);
 		SmartDashboard.putData("Auto(boi) choices", StartingPositionChooser);
-		
-		
 		
 		/////////////////////Cube Grabber/////////////////////
 		LeftArm.enableDeadbandElimination(true);
@@ -147,9 +144,18 @@ public class Robot extends IterativeRobot {
 		Left2.set(lauto);
 	}
 	
-	void controllerInput() {
+	void controllerInput() { //add function for cubic output from the Xbox controller
 			LeftStick = Xbox1.getRawAxis(1);
 			RightStick = Xbox1.getRawAxis(5); //Driving
+			
+			/////////////////////(.2*x^5 - .333*x^3)/(.1334)//////////////
+			/////////https://www.desmos.com/calculator/5rdpqmkmue/////////
+			LeftStick =  (.2*Math.pow(LeftStick, 5)-(.33333*Math.pow(LeftStick, 3)));
+			RightStick = (.2*Math.pow(RightStick, 5)-(.33333*Math.pow(RightStick, 3)));
+			
+			LeftStick = (LeftStick/.13334);
+			RightStick = (RightStick/.13334);
+			//////////////////////////////////////////////////////////////
 			
 			in = Xbox1.getRawButton(5);
 			out = Xbox1.getRawButton(6); //Intake
@@ -189,9 +195,8 @@ public class Robot extends IterativeRobot {
 				Elevator.set(0);
 			}
 	}
-	
-	
-			/////////////////Vision power////////////
+/**************************************************************************************/
+	/***************************Low Level Auto Methods**************************/
 	void tracktheSwitch() {			
 		////////wait for initial turn then do a vision///////
 				if(timetotrack && RobotAndSwitch) { //this makes sure that the robot and the switch are 												
@@ -223,20 +228,6 @@ public class Robot extends IterativeRobot {
 		
 	}
 	
-	void ExecuteNecessaryTurns() {
-		if(cubegot) {	
-			//////////after cube pickup is done//////
-			if(CenterStartPosition) { //uses spin value from DetermineNecessaryTurn to turn the right way
-				for(autoCountV = 0; autoCountV < 40; autoCountV ++) {
-					ZoomBoi.arcadeDrive(.5, spinDirection);
-				} if (autoCountV >= 40) {
-					timetotrack = true;
-				} 
-			} else { //if the bot isn't in the center the target is right ahead of it
-				timetotrack = true;
-			}
-		}
-	}
 	void AutogetCube() {
 		if(!cubegot) {
 				autoCount ++;
@@ -257,6 +248,13 @@ public class Robot extends IterativeRobot {
 				else if (autoCount >= 175) {
 					cubegot = true;
 				}
+		}
+	}
+	
+	void CrosstheBaseline() {
+		autoCountB ++;
+		if(autoCountB > 300) {
+			ZoomBoi.arcadeDrive(.5, (-.2)*spinDirection);
 		}
 	}
 	void DetermineNecessaryTurns() {
@@ -302,12 +300,31 @@ public class Robot extends IterativeRobot {
 			RobotAndSwitch = false;
 		}
 	}
+	
+	void ExecuteNecessaryTurns() {
+		if(cubegot) {	
+			//////////after cube pickup is done//////
+			if(CenterStartPosition) { //uses spin value from DetermineNecessaryTurn to turn the right way
+				for(autoCountV = 0; autoCountV < 40; autoCountV ++) {
+					ZoomBoi.arcadeDrive(.5, spinDirection);
+				} if (autoCountV >= 40) {
+					timetotrack = true;
+				} 
+			} else { //if the bot isn't in the center the target is right ahead of it
+				timetotrack = true;
+			}
+		}
+	}
 /**********************************************************************************************/
 		/*************************High Level Methods***********************************/
 	void AutoRoutine() {
 		//don't forget to add a baseline routine
 		AutogetCube();
-		ExecuteNecessaryTurns();
-		tracktheSwitch();
+		if(!BaselineAuto) {
+			ExecuteNecessaryTurns();
+			tracktheSwitch();
+		} else if(BaselineAuto) {
+			CrosstheBaseline();
+		}
 	}
 }
