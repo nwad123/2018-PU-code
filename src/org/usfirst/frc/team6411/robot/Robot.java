@@ -16,10 +16,6 @@ import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.DriverStation;
 
 public class Robot extends IterativeRobot {
-	private static final String kDefaultAuto = "Default";
-	private static final String kCustomAuto = "My Auto";
-	private String m_autoSelected;
-	private SendableChooser<String> m_chooser = new SendableChooser<>();
 
 	//////////////////////LimeLight////////////////////////
 	NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight");
@@ -38,8 +34,17 @@ public class Robot extends IterativeRobot {
 	
 	String GameData;
 	
-	public boolean LeftStartPosition, CenterStartPosition, RightStartingPosition, 
-			LeftSwitchLight, RightSwitchLight, timetotrack, cubegot = false;
+	public boolean LeftStartPosition, CenterStartPosition, RightStartPosition, BaselineAuto,
+			LeftSwitchLight, RightSwitchLight, timetotrack, cubegot, RobotAndSwitch = false;
+	
+	//////////////////auto chooser stuff////////////////////
+	private static final String Left = "Left";
+	private static final String Center = "Center";
+	private static final String Right = "Right";
+	private static final String Baseline = "Baseline and Cube";
+	private String BeetBotPosition;
+	private SendableChooser<String> StartingPositionChooser = new SendableChooser<>();
+	
 	//////////////////////Joysticks////////////////////////
 	Joystick Xbox1 = new Joystick(0);
 
@@ -60,14 +65,18 @@ public class Robot extends IterativeRobot {
 	Spark Elevator = new Spark(6);
 	
 	////////////////////random variables//////////////////
-	int autoCount = -25;
+	int autoCount, autoCountV;
 	double error;
 	
 	@Override
 	public void robotInit() {
-		m_chooser.addDefault("Default Auto", kDefaultAuto);
-		m_chooser.addObject("My Auto", kCustomAuto);
-		SmartDashboard.putData("Auto choices", m_chooser);
+		StartingPositionChooser.addDefault("The Left", Left);
+		StartingPositionChooser.addObject("The Center", Center);
+		StartingPositionChooser.addObject("The Right", Right);
+		StartingPositionChooser.addObject("Baseline Only", Baseline);
+		SmartDashboard.putData("Auto(boi) choices", StartingPositionChooser);
+		
+		
 		
 		/////////////////////Cube Grabber/////////////////////
 		LeftArm.enableDeadbandElimination(true);
@@ -85,8 +94,9 @@ public class Robot extends IterativeRobot {
 		camMode.setNumber(0);
 		ledMode.setNumber(0);
 		
+		BeetBotPosition = StartingPositionChooser.getSelected();
 		GameData = DriverStation.getInstance().getGameSpecificMessage();
-		DetermineAuto();
+		DetermineNecessaryTurns();
 	}
 
 	@Override
@@ -182,26 +192,15 @@ public class Robot extends IterativeRobot {
 	
 	
 			/////////////////Vision power////////////
-	void tracktheSwitch() {
-			if(cubegot) {	
-			//////////after cube pickup is done//////
-			if(CenterStartPosition) {
-				for(int autoCountV = 0; autoCountV < 40; autoCountV ++) {
-					ZoomBoi.arcadeDrive(.5, spinDirection);
-				} if (autoCount >= 40) {
-					timetotrack = true;
-				}
-			} else {
-				timetotrack = true;
-			}
+	void tracktheSwitch() {			
 		////////wait for initial turn then do a vision///////
-				if(timetotrack) {
-					if(v == 1.0) {
+				if(timetotrack && RobotAndSwitch) { //this makes sure that the robot and the switch are 												
+					if(v == 1.0) {                  //on the same side, otherwise that would be a yikes
 						if(area < 7) {
-							kP = .75;
-							kD = .01;
-							
-							xi = x;
+							kP = .75;				//this sets up the PD control for the vision
+							kD = .01;				//we don't use full PID because of rare sustained
+													//errors. We use the D in order to smooth out the 
+							xi = x;					//large overcorrects though
 							xi = xi/35;
 							errorP = xi;
 							errorD = (xf - xi)/.02;
@@ -215,10 +214,27 @@ public class Robot extends IterativeRobot {
 							}
 						}
 				if(v != 1.0) { 
-					ZoomBoi.arcadeDrive(.5, spinDirection);
+					ZoomBoi.arcadeDrive(.2, spinDirection);
 				}
+			} else {
+				ZoomBoi.arcadeDrive(0, 0);
 			}
 		///////////////////////////////////////////////////////
+		
+	}
+	
+	void ExecuteNecessaryTurns() {
+		if(cubegot) {	
+			//////////after cube pickup is done//////
+			if(CenterStartPosition) { //uses spin value from DetermineNecessaryTurn to turn the right way
+				for(autoCountV = 0; autoCountV < 40; autoCountV ++) {
+					ZoomBoi.arcadeDrive(.5, spinDirection);
+				} if (autoCountV >= 40) {
+					timetotrack = true;
+				} 
+			} else { //if the bot isn't in the center the target is right ahead of it
+				timetotrack = true;
+			}
 		}
 	}
 	void AutogetCube() {
@@ -238,12 +254,14 @@ public class Robot extends IterativeRobot {
 					LeftArm.set(.34);
 					RightArm.set(-.34);
 				}
-				else if (autoCount == 175) {
+				else if (autoCount >= 175) {
 					cubegot = true;
 				}
 		}
 	}
-	void DetermineAuto() { //////////////call at autoinit/////////////////
+	void DetermineNecessaryTurns() { //////////////call at auto init/////////////////
+		
+	//////////determines turning if needed by switch colors//////////	
 		if(GameData.charAt(0) == 'L') {
 			LeftSwitchLight = true;
 			RightSwitchLight = false;
@@ -257,17 +275,36 @@ public class Robot extends IterativeRobot {
 			LeftSwitchLight = false;
 		}
 		
-		if(RightSwitchLight) {
-			spinDirection = 1;
+	//////////////////determine position in boolean///////////////////
+		if(BeetBotPosition == Left) {
+			LeftStartPosition = true;
+		} else if(BeetBotPosition == Right) {
+			RightStartPosition = true;
+		} else if(BeetBotPosition ==  Center) {
+			CenterStartPosition = true;
+		} else if(BeetBotPosition == Baseline) {
+			BaselineAuto = true;
 		}
-		else if(LeftSwitchLight) {
-			spinDirection = -1;
+		
+	/////////////////////set turning if needed////////////////////////
+		if((LeftStartPosition && LeftSwitchLight) || (RightStartPosition && RightSwitchLight)) {
+			RobotAndSwitch = true;
+		} else if(CenterStartPosition){ //if it's in the center it chooses which way it's gonna turn
+			RobotAndSwitch = true;
+				if(LeftSwitchLight) {
+					spinDirection = -1;
+				} else if(RightSwitchLight) {
+					spinDirection = 1;
+				}
+		} else {
+			RobotAndSwitch = false;
 		}
 	}
 /**********************************************************************************************/
 		/*************************High Level Methods***********************************/
 	void AutoRoutine() {
 		AutogetCube();
+		ExecuteNecessaryTurns();
 		tracktheSwitch();
 	}
 }
