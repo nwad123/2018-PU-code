@@ -11,8 +11,6 @@ import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj.SPI;
-import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.DriverStation;
 
 public class Robot extends IterativeRobot {
@@ -29,7 +27,7 @@ public class Robot extends IterativeRobot {
 	double area;
 	
 	/////////////////////auto vars/////////////////////////
-	public double x,v, xf, xi, error, errorP, errorD, kP, kD, leftspin, 
+	public double xfromLimelight, v, xf, xi, error, errorP, errorD, kP, kD, leftspin, 
 			rightspin, spinDirection;
 	
 	String GameData;
@@ -100,7 +98,7 @@ public class Robot extends IterativeRobot {
 	public void autonomousPeriodic() {
 		area = ta.getDouble(0);
 		v = tv.getDouble(0);
-		x = tx.getDouble(0);
+		xfromLimelight = tx.getDouble(0);
 		AutoRoutine();
 	}
 
@@ -123,7 +121,7 @@ public class Robot extends IterativeRobot {
 	}
 	
 /*****************************************************************************************/
-	/**************BASIC METHODS**************************************************/
+	/*******************************Basic Methods***********************************/
 	void driveTrain() {	
 			LeftStick = LeftStick * -1;
 			RightStick = RightStick * 1;
@@ -205,7 +203,7 @@ public class Robot extends IterativeRobot {
 							kP = .75;				//this sets up the PD control for the vision
 							kD = .01;				//we don't use full PID because of rare sustained
 													//errors. We use the D in order to smooth out the 
-							xi = x;					//large overcorrects though
+							xi = xfromLimelight;					//large overcorrects though
 							xi = xi/35;
 							errorP = xi;
 							errorD = (xf - xi)/.02;
